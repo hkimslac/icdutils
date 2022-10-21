@@ -4,4 +4,4 @@
 - *VCS*, *Verilator* and other HDL testbench simulation util scripts will be in a separate repository
 
 ## Contact
-hkim@slac.stanford.edu
+Hyunjoon Kim (hkim@slac.stanford.edu)
