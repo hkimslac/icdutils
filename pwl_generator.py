@@ -12,7 +12,28 @@
 #Rise/Fall time (percentage w.r.t. frequency)
 #Reset pulse (separate insertion)
 
-#======================= Define some function here ==============
+#======================= Import some libraries here ==============
+from optparse import OptionParser
+
+
+#======================= Optionparser stuff here =================
+parser = OptionParser()
+parser.add_option("-n", "--name", help="name of the signal", default="sig.dat", dest="name")
+#parser.add_option("-n", "--num_pulse", help="bitsream. ex) 01100 or 0100 etc", default="")
+parser.add_option("-f", "--freq", help="ex) 5M or 2K or 1G", default="1M", dest="freq")
+parser.add_option("-r", "--rst", help="reset cycle at the beginning of pwl (y/n)", default="y", dest="rst")
+parser.add_option("-p", "--pctr", help="rise time. ex)0.01 for 1% or 0.1 for 10%", default="0.01", dest="pctr")
+parser.add_option("-t", "--pctf", help="fall time. ex)0.01 for 1% or 0.1 for 10%", default="0.01", dest="pctf")
+parser.add_option("-e", "--rr", help="is this pwl for a component that requires a reset? (y/n)", default="n", dest="rr")
+parser.add_option("-g", "--rp", help="signal type. 0=repeat entire pwl with resets. 1: single reset then pwl repeat", default="0", dest="rp")
+parser.add_option("-c", "--rn", help="is this repetitive pulse (r) or a custom control (c). If rr is set to 'no' then rp is a blank cycle with vl [off voltage]", default="r", dest="rn")
+parser.add_option("-l", "--on", help="logic high", default="1.2", dest="on")
+parser.add_option("-m", "--off", help="logic low", default="0", dest="off")
+parser.add_option("-b", "--bar", help="True: complementary logic. False: normal logic", default="False", dest="bar")
+
+(options, args) = parser.parse_args()
+
+#======================= Define some function here ===============
 def freq_convert(f):
     """
     convert user input frequency to time domain period
@@ -179,15 +200,15 @@ def gen_pwl(
             rst,              #rst = reset cycle (reset is at the beginning of the pwl)
             pctr,             #pctr = rise time percentage w.r.t. to period
             pctf,             #pctf = fall time percentage w.r.t. to period
-            rr="no",          #rr = is this pwl for a component that requires a reset? (yes/no) default=no
-            rp=0,             #rp = selectable options 
+            rr,               #rr = is this pwl for a component that requires a reset? (yes/no) default=no
+            rp,               #rp = selectable options 
                               #     0, default: repeat entire pwl with repeating resets, 
                               #     1 : single reset & repeat only pulses
-            rn='r',           #rn = is this repetitive pulse?(default 'r') or a custom control signal?('c')
+            rn,               #rn = is this repetitive pulse?(default 'r') or a custom control signal?('c')
                               #(Note: if rr is set to "no", then rp is a blank cycle with vl [off voltage])
-            on=1.2,           #logic high
-            off=0.0,          #logic low
-            bar=False         #True: complementary logic 
+            on,               #logic high
+            off,              #logic low
+            bar               #True: complementary logic 
                               #False:normal logic (default)
             ):           
     """
@@ -201,14 +222,14 @@ def gen_pwl(
     on = str(on)
     off = str(off)
     
-    if bar==False:
-        if rr=="no":
-            if rp==0:
+    if bar=='False':
+        if rr=='y':
+            if rp=='0':
                 if rn=='r':
                     ts = [[0.0],['']]
                     for m,i in enumerate(num_pulse):
                         if m==0:
-                            wr_puls(pctr, pctf, ts, i, outstr,t, on, off, unit_str)
+                            wr_puls(pctr, pctf, ts, '0', outstr,t, on, off, unit_str)
                             wr_puls(pctr, pctf, ts, i, outstr,t, on, off, unit_str)
                         else:
                             wr_puls(pctr, pctf, ts, i, outstr,t, on, off, unit_str)
@@ -227,10 +248,15 @@ def gen_pwl(
     
     return outstr
 
+
+
 #======================= Function definition ends here =====================
 
+
+
+
 #===========================================================================
-#=======================  Script Execute  ==================================
+#=======================  Script Starts Here  ==============================
 #===========================================================================
 if __name__ == "__main__":
     print("Starting PWL file generation\n")
@@ -238,15 +264,20 @@ if __name__ == "__main__":
 
     unit_str = []
 
-    sig_name = str(input("Enter the name of this signal (ex. bldrvclk or etc): "))
+    #sig_name = str(input("Enter the name of this signal (ex. bldrvclk or etc): "))
+    sig_name = options.name
     num_pulse = str(input("Enter bitstream: "))
-    freq_per_pulse = str(input("Enter the frequency of each pulse (ex. 10M): "))
+    #freq_per_pulse = str(input("Enter the frequency of each pulse (ex. 10M): "))
+    freq_per_pulse = options.freq
     freq_per_pulse = freq_convert(freq_per_pulse)
     freq_per_pulse = time_convert(freq_per_pulse)
-    rise = str(input("Enter the percentage of rise time w.r.t freq. (0.1 or 0.01 = 10% or 1%): "))
-    fall = str(input("Enter the percentage of fall time w.r.t freq. (0.1 or 0.01 = 10% or 1%): "))
+    #rise = str(input("Enter the percentage of rise time w.r.t freq. (0.1 or 0.01 = 10% or 1%): "))
+    rise = options.pctr
+    #fall = str(input("Enter the percentage of fall time w.r.t freq. (0.1 or 0.01 = 10% or 1%): "))
+    fall = options.pctf
 
-    rs_pulse = str(input("Insert reset pulse(y/n)? "))
+    #rs_pulse = str(input("Insert reset pulse(y/n)? "))
+    rs_pulse = options.rst
 
     if rs_pulse == "y":
         rs_pulse = "included"
@@ -260,7 +291,7 @@ if __name__ == "__main__":
 
     print('Generating PWL.....')
     print("The signal name is: " + sig_name)
-    out = gen_pwl(unit_str=unit_str, num_pulse=num_pulse, t=freq_per_pulse, rst=rs_pulse, pctr=pctr, pctf=pctf, rr="no", rp=0, rn='r', on=1.2, off=0.0, bar=False)
+    out = gen_pwl(unit_str=unit_str, num_pulse=num_pulse, t=freq_per_pulse, rst=rs_pulse, pctr=pctr, pctf=pctf, rr=options.rr, rp=options.rp, rn=options.rn, on=options.on, off=options.off, bar=options.bar)
 
     print('PWL generation complete!')
 
