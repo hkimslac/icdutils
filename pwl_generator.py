@@ -30,6 +30,7 @@ parser.add_option("-c", "--rn", help="is this repetitive pulse (r) or a custom c
 parser.add_option("-l", "--on", help="logic high", default="1.2", dest="on")
 parser.add_option("-m", "--off", help="logic low", default="0", dest="off")
 parser.add_option("-b", "--bar", help="True: complementary logic. False: normal logic", default="False", dest="bar")
+parser.add_option("-a", "--repeat", help="repeat given bitsream for given number of times.", default="1", dest="rep")
 
 (options, args) = parser.parse_args()
 
@@ -162,7 +163,13 @@ def concat_sig(ts,rt,t,ft,vh,vl):
     tstr   = round(rt_n + t_n + ft_n, 3)
     
     #Use this to generate pwl source to copy paste into tanner s-edit pwl vsource
-    outstr = str(rt_n) + tunitr + " " + str(vh) + "v" + " " + str(rt_n+t_n) + tunit + " " + str(vh) + "v" + " " + str(tstr) + tunitf + " " + str(vl) + "v" + " "
+    ##### need to fix here
+    if (ft[0] == "0.0") and (rt[0] == "0.0"):
+        outstr = str(tstr) + tunit + " " + str(vh) + "v" + " "
+    elif (ft[0] == "0.0"):
+        outstr = str(rt_n) + tunitr + " " + str(vh) + "v" + " " + str(rt_n+t_n) + tunit + " " + str(vh) + "v" + " "
+    else:
+        outstr = str(rt_n) + tunitr + " " + str(vh) + "v" + " " + str(rt_n+t_n) + tunit + " " + str(vh) + "v" + " " + str(tstr) + tunitf + " " + str(vl) + "v" + " "
     #Use this to generate pwl file for HSPICE
     #outstr = str(rt_n) +  " " + str(vh) + "v" + " " + str(rt_n+t_n) + " " + str(vh) + "v" + " " + str(tstr) + " " + str(vl) + "v" + " "
     
@@ -172,14 +179,14 @@ def wr_puls(pctr, pctf, ts, flag, outstr,t, on, off, unit_str):
     """
     Write pulse data to output string
     """
-    if flag=='0':
+    if flag=='0':                                  # signal bit is 0
         ts[0][0] = ts[0][0]+float(pctr[0])         # increase time by rise time (from wherever pulse starts)
         ts[0][0] = round(ts[0][0],3)               # round the time to 3-sig figs
         puls=concat_sig(ts,pctr,t,pctf,off,off)    # concat rise+pulse+fall : added reset cycle
         ts[0][0] = puls[1]                         # update the timestamp
         ts[0][0] = round(ts[0][0],3)               # round the timestamp to 3-sig figs
         outstr.append(puls[0])                     # add pulse to output string
-    elif flag=='1':
+    elif flag=='1':                                # signal bit is 1
         ts[0][0] = ts[0][0]+float(pctr[0])         # increase time by rise time (from wherever pulse starts)
         ts[0][0] = round(ts[0][0],3)               # round the time to 3-sig figs
         puls=concat_sig(ts,pctr,t,pctf,on,off)     # concat rise+pulse+fall : added reset cycle
@@ -200,7 +207,7 @@ def gen_pwl(
             rst,              #rst = reset cycle (reset is at the beginning of the pwl)
             pctr,             #pctr = rise time percentage w.r.t. to period
             pctf,             #pctf = fall time percentage w.r.t. to period
-            rr,               #rr = is this pwl for a component that requires a reset? (yes/no) default=no
+            rr,               #rr = is this pwl for a component that requires a reset? (y/n) default=n
             rp,               #rp = selectable options 
                               #     0, default: repeat entire pwl with repeating resets, 
                               #     1 : single reset & repeat only pulses
@@ -208,8 +215,9 @@ def gen_pwl(
                               #(Note: if rr is set to "no", then rp is a blank cycle with vl [off voltage])
             on,               #logic high
             off,              #logic low
-            bar               #True: complementary logic 
+            bar,              #True: complementary logic 
                               #False:normal logic (default)
+            rep               #repeat bitstream  
             ):           
     """
     Generate PWL by concatenating all the option arguments given
@@ -226,16 +234,36 @@ def gen_pwl(
         if rr=='y':
             if rp=='0':
                 if rn=='r':
+                    print("This is a repeating signal")
+                    ts = [[0.0],['']]
+                    for n in range(int(rep)):
+                        for m,i in enumerate(num_pulse):
+                            try:
+                                if m==0:
+                                    wr_puls(pctr, pctf, ts, '0', outstr, t, on, off, unit_str)
+                                    if (num_pulse[m] == num_pulse[m+1]):#####
+                                        wr_puls(pctr, fz, ts, i, outstr, t, on, off, unit_str)
+                                    else:
+                                        wr_puls(pctr, pctf, ts, i, outstr, t, on, off, unit_str)
+                                else:
+                                    if (num_pulse[m] == num_pulse[m+1]) and (num_pulse[m-1] == num_pulse[m]):#####
+                                        wr_puls(rz, fz, ts, i, outstr, t, on, off, unit_str)
+                                    elif (num_pulse[m] == num_pulse[m+1]) and (num_pulse[m-1] != num_pulse[m]):
+                                        wr_puls(pctr, fz, ts, i, outstr, t, on, off, unit_str)
+                                    else:
+                                        wr_puls(pctr, pctf, ts, i, outstr, t, on, off, unit_str)
+                            except IndexError:
+                                pass
+
+                else:
+                    print("This is a custom signal does not repeat")
                     ts = [[0.0],['']]
                     for m,i in enumerate(num_pulse):
                         if m==0:
-                            wr_puls(pctr, pctf, ts, '0', outstr,t, on, off, unit_str)
-                            wr_puls(pctr, pctf, ts, i, outstr,t, on, off, unit_str)
+                            wr_puls(pctr, pctf, ts, '0', outstr, t, on, off, unit_str)
+                            wr_puls(pctr, pctf, ts, i, outstr, t, on, off, unit_str)
                         else:
-                            wr_puls(pctr, pctf, ts, i, outstr,t, on, off, unit_str)
-                else:
-                    print("Wrong option entered for rn")
-                    
+                            wr_puls(pctr, pctf, ts, i, outstr, t, on, off, unit_str)
             else:
                 print("Wrong option entered for rp")
                 
@@ -275,6 +303,7 @@ if __name__ == "__main__":
     rise = options.pctr
     #fall = str(input("Enter the percentage of fall time w.r.t freq. (0.1 or 0.01 = 10% or 1%): "))
     fall = options.pctf
+    rep = options.rep
 
     #rs_pulse = str(input("Insert reset pulse(y/n)? "))
     rs_pulse = options.rst
@@ -286,31 +315,34 @@ if __name__ == "__main__":
 
     pctr = [str(float(rise)*float(freq_per_pulse[0])),freq_per_pulse[1]]
     pctf = [str(float(fall)*float(freq_per_pulse[0])),freq_per_pulse[1]]
+    rz   = ["0.0", freq_per_pulse[1]]
+    fz   = ["0.0", freq_per_pulse[1]]
 
     print('You have entered: {num_pulse} pluses in {freq} period @ {rt}%, {ft}% of frequency for rise/fall time and reset cycle {yn}'.format(num_pulse=str(len(num_pulse)), freq=freq_per_pulse, rt=rise, ft=fall, yn=rs_pulse))
 
     print('Generating PWL.....')
     print("The signal name is: " + sig_name)
-    out = gen_pwl(unit_str=unit_str, num_pulse=num_pulse, t=freq_per_pulse, rst=rs_pulse, pctr=pctr, pctf=pctf, rr=options.rr, rp=options.rp, rn=options.rn, on=options.on, off=options.off, bar=options.bar)
+    out = gen_pwl(unit_str=unit_str, num_pulse=num_pulse, t=freq_per_pulse, rst=rs_pulse, pctr=pctr, pctf=pctf, rr=options.rr, rp=options.rp, rn=options.rn, on=options.on, off=options.off, bar=options.bar, rep=options.rep)
 
     print('PWL generation complete!')
 
     patt=''.join(out)
     print(patt)
-    #===========================================================================
-    #=======================  Write to PWL file  ===============================
-    #===========================================================================
-    # wr_f = ''.join(out)
-    # wr_f = wr_f.split()
+    # ===========================================================================
+    # =======================  Write to PWL file  ===============================
+    # ===========================================================================
+    wr_f = ''.join(out)
+    wr_f = wr_f.split()
+    
 
-    # path = "D:\\_ScriptTools\\HSPICE\\PWLIB\\"
-    # with open(path+sig_name+"_pwl.dat", 'w') as f:
-    #     for i in range(0,len(wr_f),2):
-    #         if unit_str[0] == "ns":
-    #             f.write(wr_f[i]+ 'e-9\t' + wr_f[i+1] + '\n')
-    #         elif unit_str[0] == "us":
-    #             f.write(wr_f[i]+ 'e-6\t' + wr_f[i+1] + '\n')
-    #         elif  unit_str[0] == "ps":
-    #             f.write(wr_f[i]+ 'e-12\t' + wr_f[i+1] + '\n')
-    #         else:
-    #             print("pulse information read failed")
+    path = "D:\\_ScriptTools\\HSPICE\\PWLIB\\"
+    with open(path+sig_name+"_pwl.dat", 'w') as f:
+        for i in range(0,len(wr_f),2):
+            if unit_str[0] == "ns":
+                f.write(wr_f[i][:-2] + 'e-9\t' + wr_f[i+1][:-1] + '\n')
+            elif unit_str[0] == "us":
+                f.write(wr_f[i][:-2] + 'e-6\t' + wr_f[i+1][:-1] + '\n')
+            elif  unit_str[0] == "ps":
+                f.write(wr_f[i][:-2] + 'e-12\t' + wr_f[i+1][:-1] + '\n')
+            else:
+                print("pulse information read failed")
